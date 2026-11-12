@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ember Emu</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v=version) }}">
+</head>
+<body>
+  <header class="bar">
+    <h1 class="brand"><img src="{{ url_for('static', filename='logo.png') }}" alt="" width="30" height="30">Ember Emu <span class="version">{{ version }}</span></h1>
+    <nav class="tabs" aria-label="Views">
+      <button type="button" id="tab-provider" aria-pressed="true">Provider</button>
+      <button type="button" id="tab-consumer" aria-pressed="false">Consumer</button>
+      <button type="button" id="tab-settings" aria-pressed="false">Settings</button>
+      <button type="button" id="tab-about" aria-pressed="false">About</button>
+      <button type="button" id="logout" class="quiet" hidden>Log out</button>
+    </nav>
+    <p class="states">
+      <span id="pr-state" class="state" aria-live="polite">Not serving</span>
+      <span id="co-state" class="state" aria-live="polite">Disconnected</span>
+    </p>
+  </header>
+
+  <p id="notice" class="notice" role="alert" hidden></p>
+
+  <main>
+  <div class="grid" id="view-provider">
+    <section class="panel">
+      <h2>Server</h2>
+      <div class="fields">
+        <label class="grow">Listen address
+          <input id="pr_bind" type="text" autocomplete="off" spellcheck="false">
+        </label>
+        <label>Port
+          <input id="pr_port" type="number" min="1" max="65535">
+        </label>
+      </div>
+      <div class="checks">
+        <label><input id="pr_autostart" type="checkbox"> Start with the program</label>
+        <label><input id="pr_animate" type="checkbox"> Animate values</label>
+      </div>
+      <p class="hint">Serves the tree below to any Ember+ consumer. 0.0.0.0 listens on all network interfaces, 127.0.0.1 only on this machine. Ember+ has no login: whoever reaches the port can read the tree and change what is writable.</p>
+      <div class="actions">
+        <button type="button" id="pr-start" class="primary">Start</button>
+      </div>
+      <p id="pr-error" class="error" aria-live="polite"></p>
+    </section>
+
+    <section class="panel">
+      <h2>Consumers</h2>
+      <ul id="pr-clients" class="plain"></ul>
+      <p id="pr-clients-note" class="hint">No consumer connected.</p>
+    </section>
+
+    <section class="panel wide">
+      <h2>Tree</h2>
+      <div class="toolbar">
+        <button type="button" id="pr-example" class="quiet">Load example</button>
+        <button type="button" id="pr-clear" class="quiet">Remove all</button>
+        <a id="pr-export" class="button quiet" href="/ui/api/provider/tree" download="ember-emu-tree.json">Export</a>
+        <button type="button" id="pr-import" class="quiet">Import</button>
+        <input type="file" id="pr-import-file" accept="application/json,.json" hidden>
+        <button type="button" id="pr-collapse" class="quiet">Collapse all</button>
+        <button type="button" id="pr-expand" class="quiet">Expand all</button>
+        <span id="pr-count" class="hint"></span>
+      </div>
+      <div class="table-wrap">
+        <table id="pr-tree" class="tree">
+          <thead>
+            <tr>
+              <th scope="col">Identifier</th>
+              <th scope="col">Path</th>
+              <th scope="col">Type</th>
+              <th scope="col">Value</th>
+              <th scope="col">Access</th>
+              <th scope="col">Details</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p id="pr-tree-note" class="hint">Select a row to edit the element below. Values can be changed right in the table: here every value can be set, the access only limits what consumers may do.</p>
+    </section>
+
+    <form class="panel wide" id="pr-form" autocomplete="off">
+      <h2>Element</h2>
+      <p id="el-selected" class="hint">Nothing selected. Fill in the fields and add a new element.</p>
+      <div class="fields">
+        <label>Kind
+          <select id="el_kind">
+            {% for kind in kinds %}<option value="{{ kind }}">{{ kind }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="grow">Identifier
+          <input id="el_identifier" type="text" maxlength="255" spellcheck="false">
+        </label>
+        <label class="grow">Description
+          <input id="el_description" type="text" maxlength="4096">
+        </label>
+        <label class="check" id="el-online-field"><input id="el_is_online" type="checkbox" checked> Online</label>
+      </div>
+
+      <div id="el-parameter">
+        <div class="fields">
+          <label>Type
+            <select id="el_type">
+              {% for name in parameter_types %}<option value="{{ name }}">{{ name }}</option>{% endfor %}
+            </select>
+          </label>
+          <label>Access for consumers
+            <select id="el_access">
+              {% for name in access_values %}<option value="{{ name }}">{{ name.replace("_", " ") }}</option>{% endfor %}
+            </select>
+          </label>
+          <label class="grow" id="el-value-field">Value
+            <input id="el_value" type="text" spellcheck="false">
+          </label>
+        </div>
+        <div class="fields" id="el-number-fields">
+          <label>Minimum
+            <input id="el_minimum" type="text" inputmode="decimal" class="short">
+          </label>
+          <label>Maximum
+            <input id="el_maximum" type="text" inputmode="decimal" class="short">
+          </label>
+          <label>Step
+            <input id="el_step" type="text" inputmode="numeric" class="short">
+          </label>
+          <label id="el-factor-field">Factor
+            <input id="el_factor" type="text" inputmode="numeric" class="short">
+          </label>
+          <label class="grow">Format
+            <input id="el_format" type="text" placeholder="%.1f dB" spellcheck="false">
+          </label>
+        </div>
+        <label class="block" id="el-enumeration-field">Enumeration, one entry per line. Name=5 gives an entry its own number
+          <textarea id="el_enumeration" rows="4" spellcheck="false"></textarea>
+        </label>
+        <div class="fields">
+          <label>Stream identifier
+            <input id="el_stream_identifier" type="text" inputmode="numeric" class="short" placeholder="none">
+          </label>
+          <label>Animate
+            <select id="el_animate">
+              {% for key, label in animations.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+            </select>
+          </label>
+        </div>
+        <p class="hint">A parameter with a stream identifier is a meter: its values go only to consumers that subscribed. Animate lets the program change the value by itself.</p>
+      </div>
+
+      <div id="el-function" hidden>
+        <div class="fields">
+          <label class="grow">Arguments
+            <input id="el_arguments" type="text" placeholder="integer a, integer b" spellcheck="false">
+          </label>
+          <label class="grow">Result
+            <input id="el_result" type="text" placeholder="integer sum" spellcheck="false">
+          </label>
+        </div>
+        <p class="hint">Type and name, separated by commas. A function of the virtual tree answers with the sum of the numbers it gets, or with its arguments joined as text.</p>
+      </div>
+
+      <div id="el-matrix" hidden>
+        <div class="fields">
+          <label>Matrix type
+            <select id="el_matrix_type">
+              {% for name in matrix_types %}<option value="{{ name }}">{{ name.replace("_", " ") }}</option>{% endfor %}
+            </select>
+          </label>
+          <label>Targets
+            <input id="el_target_count" type="number" min="1" max="1024" value="4">
+          </label>
+          <label>Sources
+            <input id="el_source_count" type="number" min="1" max="1024" value="4">
+          </label>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" id="el-apply" class="primary" disabled>Apply to selected</button>
+        <button type="button" id="el-add-child" disabled>Add below selected node</button>
+        <button type="button" id="el-add-root">Add at the root</button>
+        <button type="button" id="el-remove" class="quiet" disabled>Remove selected</button>
+      </div>
+      <p id="el-message" class="hint" aria-live="polite"></p>
+    </form>
+
+    <section class="panel wide">
+      <h2>Activity</h2>
+      <div class="checks">
+        <span>What consumers ask for and change.</span>
+        <button type="button" id="pr-clear-log" class="quiet">Clear</button>
+      </div>
+      <ol id="pr-log" class="log rx"></ol>
+    </section>
+  </div>
+
+  <div class="grid" id="view-consumer" hidden>
+    <section class="panel">
+      <h2>Connection</h2>
+      <div class="fields">
+        <label class="grow">Host
+          <input id="co_host" type="text" autocomplete="off" spellcheck="false">
+        </label>
+        <label>Port
+          <input id="co_port" type="number" min="1" max="65535">
+        </label>
+      </div>
+      <div class="checks">
+        <label><input id="co_keepalive" type="checkbox"> Keep-alive</label>
+        <label><input id="co_auto_reconnect" type="checkbox"> Reconnect by itself</label>
+      </div>
+      <p class="hint">Connects to an Ember+ provider, a device or the Provider tab of this program. Keep-alive notices a provider that has gone silent.</p>
+      <div class="actions">
+        <button type="button" id="co-connect" class="primary">Connect</button>
+      </div>
+      <p id="co-info" class="hint" aria-live="polite"></p>
+      <p id="co-error" class="error" aria-live="polite"></p>
+    </section>
+
+    <section class="panel wide">
+      <h2>Pinned parameters</h2>
+      <div class="table-wrap">
+        <table id="co-pins" class="tree">
+          <thead>
+            <tr>
+              <th scope="col">Parameter</th>
+              <th scope="col">Value</th>
+              <th scope="col">Type</th>
+              <th scope="col">Access</th>
+              <th scope="col">Changes</th>
+              <th scope="col">Last change</th>
+              <th scope="col"></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p id="co-pins-note" class="hint">Nothing pinned yet. Pin parameters in the tree below to keep their values in view. Pins are remembered by name and found again after every connect.</p>
+    </section>
+
+    <section class="panel wide">
+      <h2>Tree</h2>
+      <div class="toolbar">
+        <button type="button" id="co-expand-all" class="quiet">Load and expand all</button>
+        <button type="button" id="co-collapse" class="quiet">Collapse all</button>
+        <button type="button" id="co-refresh" class="quiet">Read again</button>
+        <label><input id="co-check" type="checkbox" checked> Check values before sending</label>
+        <span id="co-count" class="hint"></span>
+      </div>
+      <div class="table-wrap">
+        <table id="co-tree" class="tree">
+          <thead>
+            <tr>
+              <th scope="col">Identifier</th>
+              <th scope="col">Path</th>
+              <th scope="col">Type</th>
+              <th scope="col">Value</th>
+              <th scope="col">Access</th>
+              <th scope="col">Details</th>
+              <th scope="col"></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p id="co-tree-note" class="hint">Not connected.</p>
+    </section>
+
+    <section class="panel wide">
+      <h2>Activity</h2>
+      <div class="checks">
+        <span>What was sent to the provider, and changes of pinned parameters.</span>
+        <button type="button" id="co-clear-log" class="quiet">Clear</button>
+      </div>
+      <ol id="co-log" class="log rx"></ol>
+    </section>
+  </div>
+
+  <form class="grid" id="view-settings" hidden autocomplete="off">
+    <section class="panel">
+      <h2>Web interface</h2>
+      <div class="checks">
+        <label><input id="acc_web_enabled" type="checkbox"> Web interface on</label>
+        <label><input id="acc_web_login" type="checkbox"> Require login</label>
+      </div>
+      <div class="fields">
+        <label class="grow">User name
+          <input id="acc_web_user" type="text" maxlength="64" autocomplete="off" spellcheck="false">
+        </label>
+        <label class="grow">New password
+          <input id="acc_web_password" type="password" maxlength="128" autocomplete="new-password">
+        </label>
+      </div>
+      <p id="acc-web-password-state" class="hint"></p>
+      <div class="fields" id="acc-current-row" hidden>
+        <label class="grow">Current web password
+          <input id="acc_current_password" type="password" maxlength="128" autocomplete="current-password">
+        </label>
+      </div>
+      <p class="hint">This page and its login. Switching the web interface off ends your access to this page. Switch it on again in the desktop window or start with <code>--web on</code>.</p>
+    </section>
+
+    <section class="panel">
+      <h2>REST API</h2>
+      <div class="checks">
+        <label><input id="acc_api_enabled" type="checkbox"> REST API on</label>
+        <label><input id="acc_api_login" type="checkbox"> Require login</label>
+      </div>
+      <div class="fields">
+        <label class="grow">User name
+          <input id="acc_api_user" type="text" maxlength="64" autocomplete="off" spellcheck="false">
+        </label>
+        <label class="grow">New password
+          <input id="acc_api_password" type="password" maxlength="128" autocomplete="new-password">
+        </label>
+      </div>
+      <p id="acc-api-password-state" class="hint"></p>
+      <p class="hint">For other programs, under <code id="acc-api-base">/api/v1/</code>. The login is HTTP Basic.</p>
+    </section>
+
+    <section class="panel wide">
+      <h2>Apply</h2>
+      <p class="hint">Passwords need at least {{ min_password }} characters. They are stored as a salted hash, never as text. Leave a password field empty to keep the password that is set. These logins protect this page and the REST API. The Ember+ port itself has no login.</p>
+      <ul id="acc-warnings" class="warnings"></ul>
+      <div class="actions">
+        <button type="submit" id="acc-apply" class="primary">Apply</button>
+      </div>
+      <p id="acc-message" class="hint" aria-live="polite"></p>
+    </section>
+  </form>
+
+  <div class="grid" id="view-about" hidden>
+    <section class="panel wide">
+      <h2>About</h2>
+      <img class="about-logo" src="{{ url_for('static', filename='logo.png') }}" alt="Ember Emu logo" width="128" height="128">
+      <p class="about-title">Ember Emu {{ version }}</p>
+      <p>{{ about.SUMMARY }}</p>
+      <p>Author: {{ about.AUTHOR }}<br>License: {{ about.LICENSE_NAME }}. {{ about.COPYRIGHT }}.</p>
+      <p>Source code: <a href="{{ about.HOMEPAGE }}" rel="noopener">{{ about.HOMEPAGE }}</a></p>
+      <p>{{ about.TRADEMARK }}</p>
+      <p>{{ about.DISCLAIMER }}</p>
+      <pre class="hex license">{{ about.LICENSE_TEXT }}</pre>
+    </section>
+  </div>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js', v=version) }}"></script>
+  <script src="{{ url_for('static', filename='provider.js', v=version) }}"></script>
+  <script src="{{ url_for('static', filename='settings.js', v=version) }}"></script>
+  <script src="{{ url_for('static', filename='consumer.js', v=version) }}"></script>
+</body>
+</html>

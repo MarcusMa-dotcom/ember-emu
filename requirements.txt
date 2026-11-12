@@ -1,0 +1,2 @@
+flask>=3.0
+emberemu @ git+https://github.com/MarcusMa-dotcom/ember-emu-lib@v0.1.0

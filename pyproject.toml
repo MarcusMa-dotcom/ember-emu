@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ember-emu"
+dynamic = ["version"]
+description = "Ember Emu serves a virtual Ember+ tree and reads the tree of any Ember+ provider, for testing: desktop window, web interface and REST API."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Marcus Mathy" }]
+keywords = ["ember+", "emberplus", "s101", "glow", "lawo", "broadcast"]
+dependencies = [
+    "flask>=3.0",
+    # The library comes straight from its repository at a fixed tag, never by name from a package index.
+    "emberemu @ git+https://github.com/MarcusMa-dotcom/ember-emu-lib@v0.1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.urls]
+Homepage = "https://github.com/MarcusMa-dotcom/ember-emu"
+Library = "https://github.com/MarcusMa-dotcom/ember-emu-lib"
+
+[project.scripts]
+ember-emu = "emberemu_app.__main__:main"
+
+[tool.setuptools]
+packages = ["emberemu_app"]
+
+[tool.setuptools.dynamic]
+version = { attr = "emberemu_app.__version__" }
+
+[tool.setuptools.package-data]
+emberemu_app = ["templates/*.html", "static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
